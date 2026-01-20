@@ -7,8 +7,8 @@ on:
   #   - cron: 0 20 * * *
 
 env:
-  REPO_URL: https://github.com/laipeng668/immortalwrt.git
-  REPO_BRANCH: 25.12-mtk
+  REPO_URL: https://github.com/immortalwrt/immortalwrt.git
+  REPO_BRANCH: openwrt-25.12
   CONFIG_FILE: configs/MT798X.config
   GENERAL_CONFIG_FILE: configs/General.config
   DIY_SCRIPT: scripts/Roc-script.sh
@@ -113,6 +113,7 @@ jobs:
         # 修改配置文件
         sed -i '/CONFIG_PACKAGE_sqm-scripts-nss=y/d' .config
         sed -i '/CONFIG_PACKAGE_luci-app-cpufreq=y/d' .config
+        sed -i '/# CONFIG_TARGET_ROOTFS_INITRAMFS is not set/d' .config
         # sed -i "/uci.set('dhcp', section_id, 'leasetime', '12h');/a\    uci.set('dhcp', section_id, 'dhcpv4', 'server');" \
         #        feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/interfaces.js
         make defconfig
@@ -148,7 +149,7 @@ jobs:
         mv immortalwrt-mediatek-filogic.manifest MT798X.manifest
         mv -f $OPENWRT_PATH/bin/packages/*/*/*.apk packages
         tar -zcf MT798X.Packages.tar.gz packages
-        rm -rf packages feeds.buildinfo version.buildinfo sha256sums profiles.json *-bl2.bin
+        rm -rf packages feeds.buildinfo version.buildinfo sha256sums profiles.json
         echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
 
     - name: Upload Firmware To Artifact(将固件上传到Artifact)
@@ -170,7 +171,7 @@ jobs:
         body: |
           **This is OpenWrt Firmware for ${{ env.FIRMWARE_TAG }}**
           ### 📒 固件信息
-          - 这是custom U-Boot layout的6.12内核固件，默认主题为Aurora；该固件在ImmortalWrt的基础上，添加了额外的软件包ddns、ttyd、upnp、wolplus、samba4、vlmcsd、aria2、autoreboot、uhttpd、wifischedule、frps、frpc、diskman、hd-idle、banip、acme、arpbind、usb-printer、passwall、oaf、sqm、wireguard、watchcat、wechatpush、3cat、smartdns（**K2P**仅包含ttyd、autoreboot、uhttpd、wifischedule），并添加了若干工具，具体详见对应机型的config（MT798X.config和General.config）。
+          - 这是基于ImmortalWrt的openwrt-25.12分支制作的个人定制固件，默认主题为Aurora；该固件在ImmortalWrt的基础上，添加了额外的软件包ddns、ttyd、upnp、wolplus、samba4、vlmcsd、aria2、autoreboot、uhttpd、wifischedule、frps、frpc、diskman、hd-idle、banip、acme、arpbind、usb-printer、passwall、oaf、sqm、wireguard、watchcat、wechatpush、3cat、smartdns，并添加了若干工具，具体详见MT798X.config和General.config。
           - 💻 这是 ${{ env.FIRMWARE_TAG }} 平台使用的 OpenWrt 固件
           - ⚽ 固件源码: ${{ env.REPO_URL }}
           - 💝 源码分支: ${{ env.REPO_BRANCH }}

@@ -22,5 +22,3 @@ jobs:
     MT798X-ImmortalWrt:
       uses: ./.github/workflows/MT798X-ImmortalWrt.yml
 
-    K2P-ImmortalWrt:
-      uses: ./.github/workflows/K2P-ImmortalWrt.yml
