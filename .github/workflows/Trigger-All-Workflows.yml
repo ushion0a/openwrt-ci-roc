@@ -7,18 +7,18 @@ on:
 
 jobs:
 
-    IPQ60XX-LibWrt:
-      uses: ./.github/workflows/IPQ60XX-LibWrt.yml
+#    IPQ60XX-LibWrt:
+#      uses: ./.github/workflows/IPQ60XX-LibWrt.yml
 
     IPQ807X-LibWrt:
       uses: ./.github/workflows/IPQ807X-LibWrt.yml
 
-    Arthur-Athena-Taiyi-ImmortalWrt:
-      uses: ./.github/workflows/Arthur&Athena&Taiyi-ImmortalWrt.yml
+#    Arthur-Athena-Taiyi-ImmortalWrt:
+#      uses: ./.github/workflows/Arthur&Athena&Taiyi-ImmortalWrt.yml
 
-    x86-64-ImmortalWrt:
-      uses: ./.github/workflows/x86-64-ImmortalWrt.yml
+#    x86-64-ImmortalWrt:
+#      uses: ./.github/workflows/x86-64-ImmortalWrt.yml
 
-    MT798X-ImmortalWrt:
-      uses: ./.github/workflows/MT798X-ImmortalWrt.yml
+#    MT798X-ImmortalWrt:
+#      uses: ./.github/workflows/MT798X-ImmortalWrt.yml
 
