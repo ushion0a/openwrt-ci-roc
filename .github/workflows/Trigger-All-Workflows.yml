@@ -1,24 +1,87 @@
-name: Trigger-All-Workflows  # 主要工作流的名称
+name: Trigger-All-Workflows
 
 on:
-  workflow_dispatch:  # 手动触发：通过 GitHub UI 来触发
+  workflow_dispatch:
+    inputs:
+      ipq60xx_libwrt:
+        description: 运行 IPQ60XX-LibWrt
+        required: false
+        type: boolean
+        default: false
+      ipq807x_libwrt:
+        description: 运行 IPQ807X-LibWrt
+        required: false
+        type: boolean
+        default: true
+      jdcloud_immortalwrt:
+        description: 运行 JDCloud-ImmortalWrt
+        required: false
+        type: boolean
+        default: false
+      jdcloud_nowifi_immortalwrt:
+        description: 运行 JDCloud-NoWiFi-ImmortalWrt
+        required: false
+        type: boolean
+        default: false
+      x86_64_immortalwrt:
+        description: 运行 x86-64-ImmortalWrt
+        required: false
+        type: boolean
+        default: false
+      build_packages:
+        description: 运行 Build-Packages
+        required: false
+        type: boolean
+        default: false
   schedule:
-    - cron: 0 20 * * 5  # 北京时间星期六凌晨4点，定时触发
+    - cron: "0 18 * * 5"
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
 
-#    IPQ60XX-LibWrt:
-#      uses: ./.github/workflows/IPQ60XX-LibWrt.yml
+    IPQ60XX-LibWrt:
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.ipq60xx_libwrt }}
+      uses: ./.github/workflows/IPQ60XX-LibWrt.yml
+      permissions:
+        contents: write
+        actions: write
 
     IPQ807X-LibWrt:
+      if: ${{ github.event_name == 'schedule' || inputs.ipq807x_libwrt }}
       uses: ./.github/workflows/IPQ807X-LibWrt.yml
+      permissions:
+        contents: write
+        actions: write
 
-#    Arthur-Athena-Taiyi-ImmortalWrt:
-#      uses: ./.github/workflows/Arthur&Athena&Taiyi-ImmortalWrt.yml
+    JDCloud-ImmortalWrt:
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.jdcloud_immortalwrt }}
+      uses: ./.github/workflows/JDCloud-ImmortalWrt.yml
+      permissions:
+        contents: write
+        actions: write
 
-#    x86-64-ImmortalWrt:
-#      uses: ./.github/workflows/x86-64-ImmortalWrt.yml
+    JDCloud-NoWiFi-ImmortalWrt:
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.jdcloud_nowifi_immortalwrt }}
+      uses: ./.github/workflows/JDCloud-NoWiFi-ImmortalWrt.yml
+      permissions:
+        contents: write
+        actions: write
 
-#    MT798X-ImmortalWrt:
-#      uses: ./.github/workflows/MT798X-ImmortalWrt.yml
+    x86-64-ImmortalWrt:
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.x86_64_immortalwrt }}
+      uses: ./.github/workflows/x86-64-ImmortalWrt.yml
+      permissions:
+        contents: write
+        actions: write
 
+    Build-Packages:
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_packages }}
+      uses: ./.github/workflows/Build-Packages.yml
+      permissions:
+        contents: write
+        actions: read
+      with:
+        sdk_version: ALL
