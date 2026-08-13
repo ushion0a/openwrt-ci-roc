@@ -30,14 +30,14 @@ on:
         type: choice
         options:
           - ALL
-          - nginx
-          - luci-app-aria2
-          - luci-app-frpc
-          - luci-app-frps
-          - luci-app-gecoosac
-          - luci-app-lucky
-          - luci-app-openlist2
-          - luci-theme-aurora
+          - wireguard
+          - argon
+          - banip
+          - ddns
+          - tailscale
+          - dmesg
+          - htop
+          - nano
   workflow_call:
     inputs:
       sdk_version:
@@ -97,7 +97,7 @@ jobs:
         else:
             raise SystemExit(f"Unsupported sdk_version: {selected_sdk_version}")
 
-        if selected_arch == "ALL" and selected_package == "luci-theme-aurora":
+        if selected_arch == "ALL" and selected_package == "argon":
             selected_architectures = ["x86-64"]
         elif selected_arch == "ALL":
             selected_architectures = architectures
@@ -261,5 +261,5 @@ jobs:
           - 选择的架构：${{ inputs.arch }}
           - 选择的 SDK：${{ inputs.sdk_version }}
           - 选择的软件包：${{ inputs.package }}
-          - 源码来源：[laipeng668/packages](https://github.com/laipeng668/packages)（aria2、ariang、frp-binary-toml、nginx分支）、[laipeng668/luci](https://github.com/laipeng668/luci)（frp-toml分支）、[laipeng668/luci-app-gecoosac](https://github.com/laipeng668/luci-app-gecoosac)、[gdy666/luci-app-lucky](https://github.com/gdy666/luci-app-lucky)、[laipeng668/luci-app-openlist2](https://github.com/laipeng668/luci-app-openlist2)、[eamonxg/luci-theme-aurora](https://github.com/eamonxg/luci-theme-aurora)、[eamonxg/luci-app-aurora-config](https://github.com/eamonxg/luci-app-aurora-config)
-          - 说明：Release 附件按 `<SDK>-<软件包>-<架构>.zip` 分组，普通分组内的 `.apk/.ipk` 文件也使用对应架构后缀；`luci-theme-aurora` 使用 `all` 架构后缀，`arch=ALL` 时也只保留一份。下载后先解压，`apk` 软件包使用 `apk add --allow-untrusted *.apk` 安装，`ipk` 软件包使用 `opkg install *.ipk` 安装。
+          - 源码来源：WireGuard、BanIP、DDNS/Cloudflare、Tailscale、dmesg、htop 和 nano 使用 OpenWrt SDK 官方 feeds；Argon 使用作者 [jerrykuku](https://github.com/jerrykuku) 的官方仓库。
+          - 说明：Release 附件按 `<SDK>-<软件包>-<架构>.zip` 分组，普通分组内的 `.apk/.ipk` 文件也使用对应架构后缀；Argon 使用 `all` 架构后缀，`arch=ALL` 时只保留一份。下载后先解压，`apk` 软件包使用 `apk add --allow-untrusted *.apk` 安装，`ipk` 软件包使用 `opkg install *.ipk` 安装。
