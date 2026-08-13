@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PACKAGES_REPO="${PACKAGES_REPO:-https://github.com/laipeng668/packages}"
-LUCI_REPO="${LUCI_REPO:-https://github.com/laipeng668/luci}"
-GECOOSAC_REPO="${GECOOSAC_REPO:-https://github.com/laipeng668/luci-app-gecoosac}"
-AURORA_REPO="${AURORA_REPO:-https://github.com/eamonxg/luci-theme-aurora}"
-AURORA_CONFIG_REPO="${AURORA_CONFIG_REPO:-https://github.com/eamonxg/luci-app-aurora-config}"
-OPENLIST2_REPO="${OPENLIST2_REPO:-https://github.com/laipeng668/luci-app-openlist2}"
-LUCKY_REPO="${LUCKY_REPO:-https://github.com/gdy666/luci-app-lucky}"
+ARGON_REPO="${ARGON_REPO:-https://github.com/jerrykuku/luci-theme-argon}"
+ARGON_CONFIG_REPO="${ARGON_CONFIG_REPO:-https://github.com/jerrykuku/luci-app-argon-config}"
 OPENWRT_TARGET="${OPENWRT_TARGET:-x86}"
 OPENWRT_SUBTARGET="${OPENWRT_SUBTARGET:-64}"
 OPENWRT_TARGET_PROFILE="${OPENWRT_TARGET_PROFILE:-}"
@@ -24,7 +19,6 @@ PACKAGE_ARCH_NAME="${PACKAGE_ARCH_NAME:-$OPENWRT_TARGET-$OPENWRT_SUBTARGET}"
 PACKAGE_SELECTED_ARCH="${PACKAGE_SELECTED_ARCH:-$PACKAGE_ARCH_NAME}"
 PACKAGE_SELECTION="${PACKAGE_SELECTION:-${PACKAGE_NAME:-all}}"
 SDK_ARCHIVE="$RUNNER_TEMP/openwrt-sdk.tarball"
-SPARSE_ROOT="$RUNNER_TEMP/openwrt-sparse-clone"
 WORKSPACE="${GITHUB_WORKSPACE:-$PWD}"
 
 COMPILE_TARGETS=()
@@ -48,38 +42,23 @@ normalize_package_selection() {
     "" | all | "全部")
       printf 'all\n'
       ;;
-    frp | nginx | luci-app-aria2 | luci-app-frpc | luci-app-frps | luci-app-gecoosac | luci-app-lucky | luci-app-openlist2 | luci-theme-aurora)
+    wireguard | argon | banip | ddns | tailscale | dmesg | htop | nano)
       printf '%s\n' "$selection"
       ;;
-    aria2 | ariang)
-      printf 'luci-app-aria2\n'
+    luci-proto-wireguard | wireguard-tools)
+      printf 'wireguard\n'
       ;;
-    frpc)
-      printf 'luci-app-frpc\n'
+    luci-theme-argon | luci-app-argon-config)
+      printf 'argon\n'
       ;;
-    frps)
-      printf 'luci-app-frps\n'
+    luci-app-banip)
+      printf 'banip\n'
       ;;
-    frp-binary-toml | frp-toml)
-      printf 'frp\n'
-      ;;
-    nginx-full | nginx-ssl)
-      printf 'nginx\n'
-      ;;
-    gecoosac)
-      printf 'luci-app-gecoosac\n'
-      ;;
-    openlist | openlist2)
-      printf 'luci-app-openlist2\n'
-      ;;
-    luci-app-openlist)
-      printf 'luci-app-openlist2\n'
-      ;;
-    lucky)
-      printf 'luci-app-lucky\n'
+    luci-app-ddns | ddns-scripts | ddns-scripts-cloudflare)
+      printf 'ddns\n'
       ;;
     *)
-      die "Unsupported PACKAGE_SELECTION: ${1:-} (supported: all, nginx, luci-app-aria2, luci-app-frpc, luci-app-frps, luci-app-gecoosac, luci-app-lucky, luci-app-openlist2, luci-theme-aurora; legacy aliases: aria2, ariang, frp, gecoosac, lucky, openlist2)"
+      die "Unsupported PACKAGE_SELECTION: ${1:-} (supported: all, wireguard, argon, banip, ddns, tailscale, dmesg, htop, nano)"
       ;;
   esac
 }
@@ -249,51 +228,6 @@ extract_sdk() {
   esac
 }
 
-git_sparse_clone() {
-  local branch="$1"
-  local repourl="$2"
-  local target_root="$3"
-  local repodir
-  local sparse_path
-  shift 3
-
-  repodir="$SPARSE_ROOT/$(basename "${repourl%.git}")-${branch//\//-}"
-  rm -rf "$repodir"
-  git clone \
-    --depth=1 \
-    --no-tags \
-    -b "$branch" \
-    --single-branch \
-    --filter=blob:none \
-    --sparse \
-    "$repourl" \
-    "$repodir"
-
-  (
-    cd "$repodir"
-    git sparse-checkout set "$@"
-  )
-
-  for sparse_path in "$@"; do
-    local source_path="$repodir/$sparse_path"
-    local target_path
-
-    target_path="$SDK_ROOT/$target_root/$sparse_path"
-
-    [ -d "$source_path" ] || die "Sparse package directory not found: $source_path"
-    if [ ! -f "$source_path/Makefile" ] &&
-      [ -z "$(find "$source_path" -mindepth 2 -maxdepth 2 -type f -name Makefile -print -quit)" ]; then
-      die "Package Makefile not found under: $source_path"
-    fi
-
-    rm -rf "$target_path"
-    mkdir -p "$(dirname "$target_path")"
-    cp -a "$source_path" "$target_path"
-  done
-
-  rm -rf "$repodir"
-}
-
 git_clone_package_repo() {
   local repourl="$1"
   local target_path="$2"
@@ -312,39 +246,12 @@ git_clone_package_repo() {
   done
 }
 
-remove_builtin_packages() {
-  rm -rf \
-    "$SDK_ROOT/feeds/packages/net/aria2" \
-    "$SDK_ROOT/feeds/packages/net/ariang" \
-    "$SDK_ROOT/feeds/packages/net/frp" \
-    "$SDK_ROOT/feeds/packages/lang/golang" \
-    "$SDK_ROOT/feeds/packages/net/nginx" \
-    "$SDK_ROOT/feeds/luci/applications/luci-app-frpc" \
-    "$SDK_ROOT/feeds/luci/applications/luci-app-frps"
-}
-
 load_custom_packages() {
-  mkdir -p "$SPARSE_ROOT"
-
-  git_sparse_clone aria2 "$PACKAGES_REPO" feeds/packages net/aria2
-  git_sparse_clone ariang "$PACKAGES_REPO" feeds/packages net/ariang
-  git_sparse_clone master "$PACKAGES_REPO" feeds/packages lang/golang
-  git_sparse_clone frp-binary-toml "$PACKAGES_REPO" feeds/packages net/frp
-  git_sparse_clone nginx "$PACKAGES_REPO" feeds/packages net/nginx
-  git_sparse_clone frp-toml "$LUCI_REPO" feeds/luci \
-    applications/luci-app-frpc \
-    applications/luci-app-frps
-  git_clone_package_repo "$GECOOSAC_REPO" "$SDK_ROOT/package/luci-app-gecoosac" \
-    gecoosac/Makefile \
-    luci-app-gecoosac/Makefile
-  git_clone_package_repo "$AURORA_REPO" "$SDK_ROOT/package/luci-theme-aurora" Makefile
-  git_clone_package_repo "$AURORA_CONFIG_REPO" "$SDK_ROOT/package/luci-app-aurora-config" Makefile
-  git_clone_package_repo "$OPENLIST2_REPO" "$SDK_ROOT/package/openlist2" \
-    openlist2/Makefile \
-    luci-app-openlist2/Makefile
-  git_clone_package_repo "$LUCKY_REPO" "$SDK_ROOT/package/lucky" \
-    lucky/Makefile \
-    luci-app-lucky/Makefile
+  rm -rf \
+    "$SDK_ROOT/feeds/luci/themes/luci-theme-argon" \
+    "$SDK_ROOT/feeds/luci/applications/luci-app-argon-config"
+  git_clone_package_repo "$ARGON_REPO" "$SDK_ROOT/package/luci-theme-argon" Makefile
+  git_clone_package_repo "$ARGON_CONFIG_REPO" "$SDK_ROOT/package/luci-app-argon-config" Makefile
 }
 
 prune_luci_translations() {
@@ -355,10 +262,8 @@ prune_luci_translations() {
   local root_dir
 
   for root_dir in \
-    "$SDK_ROOT/package/luci-app-gecoosac" \
-    "$SDK_ROOT/package/luci-app-aurora-config" \
-    "$SDK_ROOT/package/luci-theme-aurora" \
-    "$SDK_ROOT/package/roc" \
+    "$SDK_ROOT/package/luci-app-argon-config" \
+    "$SDK_ROOT/package/luci-theme-argon" \
     "$SDK_ROOT/package/feeds/luci" \
     "$SDK_ROOT/feeds/luci/applications"; do
     [ -d "$root_dir" ] || continue
@@ -449,95 +354,34 @@ add_luci_i18n_packages() {
 generate_artifact_filters() {
   ARTIFACT_PACKAGE_NAMES=()
 
-  if selection_in luci-app-aria2 && {
-    config_package_enabled aria2 ||
-      config_package_enabled luci-app-aria2
-  }; then
-    add_artifact_package aria2
+  if selection_in wireguard; then
+    config_package_enabled wireguard-tools && add_artifact_package wireguard-tools
+    config_package_enabled luci-proto-wireguard && add_artifact_package luci-proto-wireguard
   fi
 
-  if selection_in luci-app-aria2 && config_package_enabled ariang; then
-    add_artifact_package ariang
+  if selection_in argon; then
+    config_package_enabled luci-theme-argon && add_artifact_package luci-theme-argon
+    config_package_enabled luci-app-argon-config && add_artifact_package luci-app-argon-config
+    add_luci_i18n_packages argon-config
   fi
 
-  if selection_in luci-app-aria2 && config_package_enabled luci-app-aria2; then
-    add_artifact_package luci-app-aria2
-    add_luci_i18n_packages aria2
+  if selection_in banip; then
+    config_package_enabled luci-app-banip && add_artifact_package banip
+    config_package_enabled luci-app-banip && add_artifact_package luci-app-banip
+    add_luci_i18n_packages banip
   fi
 
-  if { selection_in frp && config_package_enabled frpc; } ||
-    { selection_in luci-app-frpc && {
-      config_package_enabled frpc ||
-        config_package_enabled luci-app-frpc
-    }; }; then
-    add_artifact_package frpc
+  if selection_in ddns; then
+    config_package_enabled ddns-scripts && add_artifact_package ddns-scripts
+    config_package_enabled ddns-scripts-cloudflare && add_artifact_package ddns-scripts-cloudflare
+    config_package_enabled luci-app-ddns && add_artifact_package luci-app-ddns
+    add_luci_i18n_packages ddns
   fi
 
-  if { selection_in frp && config_package_enabled frps; } ||
-    { selection_in luci-app-frps && {
-      config_package_enabled frps ||
-        config_package_enabled luci-app-frps
-    }; }; then
-    add_artifact_package frps
-  fi
-
-  if selection_in frp luci-app-frpc && config_package_enabled luci-app-frpc; then
-    add_artifact_package luci-app-frpc
-    add_luci_i18n_packages frpc
-  fi
-
-  if selection_in frp luci-app-frps && config_package_enabled luci-app-frps; then
-    add_artifact_package luci-app-frps
-    add_luci_i18n_packages frps
-  fi
-
-  selection_in nginx && config_package_enabled nginx && add_artifact_package nginx
-  selection_in nginx && config_package_enabled nginx-full && add_artifact_package nginx-full
-  selection_in nginx && config_package_enabled nginx-ssl && add_artifact_package nginx-ssl
-
-  if selection_in luci-app-openlist2 && {
-    config_package_enabled openlist2 ||
-      config_package_enabled luci-app-openlist2
-  }; then
-    add_artifact_package openlist2
-  fi
-
-  if selection_in luci-app-lucky && {
-    config_package_enabled lucky ||
-      config_package_enabled luci-app-lucky
-  }; then
-    add_artifact_package lucky
-  fi
-
-  if selection_in luci-app-gecoosac && {
-    config_package_enabled gecoosac ||
-      config_package_enabled luci-app-gecoosac
-  }; then
-    add_artifact_package gecoosac
-  fi
-
-  if selection_in luci-app-gecoosac && config_package_enabled luci-app-gecoosac; then
-    add_artifact_package luci-app-gecoosac
-    add_luci_i18n_packages gecoosac
-  fi
-
-  if selection_in luci-app-openlist2 && config_package_enabled luci-app-openlist2; then
-    add_artifact_package luci-app-openlist2
-    add_luci_i18n_packages openlist2
-  fi
-
-  if selection_in luci-app-lucky && config_package_enabled luci-app-lucky; then
-    add_artifact_package luci-app-lucky
-    add_artifact_package luci-i18n-lucky-zh-cn
-  fi
-
-  if selection_in luci-theme-aurora; then
-    config_package_enabled luci-theme-aurora && add_artifact_package luci-theme-aurora
-    if config_package_enabled luci-app-aurora-config; then
-      add_artifact_package luci-app-aurora-config
-      add_luci_i18n_packages aurora-config
-    fi
-  fi
+  selection_in tailscale && config_package_enabled tailscale && add_artifact_package tailscale
+  selection_in dmesg && config_package_enabled dmesg && add_artifact_package dmesg
+  selection_in htop && config_package_enabled htop && add_artifact_package htop
+  selection_in nano && config_package_enabled nano && add_artifact_package nano
 
   [ "${#ARTIFACT_PACKAGE_NAMES[@]}" -gt 0 ] || die "No package artifact filters were generated for PACKAGE_SELECTION=$PACKAGE_SELECTION"
 }
@@ -569,68 +413,41 @@ package_file_matches_name() {
 artifact_package_group() {
   local package_file_name="$1"
 
-  if package_file_matches_name "$package_file_name" aria2 ||
-    package_file_matches_name "$package_file_name" ariang ||
-    package_file_matches_name "$package_file_name" luci-app-aria2 ||
-    package_file_matches_name "$package_file_name" luci-i18n-aria2-zh-cn ||
-    package_file_matches_name "$package_file_name" luci-i18n-aria2-zh-tw; then
-    printf 'luci-app-aria2\n'
+  if package_file_matches_name "$package_file_name" wireguard-tools ||
+    package_file_matches_name "$package_file_name" luci-proto-wireguard; then
+    printf 'wireguard\n'
     return 0
   fi
 
-  if package_file_matches_name "$package_file_name" frpc ||
-    package_file_matches_name "$package_file_name" luci-app-frpc ||
-    package_file_matches_name "$package_file_name" luci-i18n-frpc-zh-cn ||
-    package_file_matches_name "$package_file_name" luci-i18n-frpc-zh-tw; then
-    printf 'luci-app-frpc\n'
+  if package_file_matches_name "$package_file_name" luci-theme-argon ||
+    package_file_matches_name "$package_file_name" luci-app-argon-config ||
+    package_file_matches_name "$package_file_name" luci-i18n-argon-config-zh-cn ||
+    package_file_matches_name "$package_file_name" luci-i18n-argon-config-zh-tw; then
+    printf 'argon\n'
     return 0
   fi
 
-  if package_file_matches_name "$package_file_name" frps ||
-    package_file_matches_name "$package_file_name" luci-app-frps ||
-    package_file_matches_name "$package_file_name" luci-i18n-frps-zh-cn ||
-    package_file_matches_name "$package_file_name" luci-i18n-frps-zh-tw; then
-    printf 'luci-app-frps\n'
+  if package_file_matches_name "$package_file_name" banip ||
+    package_file_matches_name "$package_file_name" luci-app-banip ||
+    package_file_matches_name "$package_file_name" luci-i18n-banip-zh-cn ||
+    package_file_matches_name "$package_file_name" luci-i18n-banip-zh-tw; then
+    printf 'banip\n'
     return 0
   fi
 
-  if package_file_matches_name "$package_file_name" gecoosac ||
-    package_file_matches_name "$package_file_name" luci-app-gecoosac ||
-    package_file_matches_name "$package_file_name" luci-i18n-gecoosac-zh-cn ||
-    package_file_matches_name "$package_file_name" luci-i18n-gecoosac-zh-tw; then
-    printf 'luci-app-gecoosac\n'
+  if package_file_matches_name "$package_file_name" ddns-scripts ||
+    package_file_matches_name "$package_file_name" ddns-scripts-cloudflare ||
+    package_file_matches_name "$package_file_name" luci-app-ddns ||
+    package_file_matches_name "$package_file_name" luci-i18n-ddns-zh-cn ||
+    package_file_matches_name "$package_file_name" luci-i18n-ddns-zh-tw; then
+    printf 'ddns\n'
     return 0
   fi
 
-  if package_file_matches_name "$package_file_name" openlist2 ||
-    package_file_matches_name "$package_file_name" luci-app-openlist2 ||
-    package_file_matches_name "$package_file_name" luci-i18n-openlist2-zh-cn ||
-    package_file_matches_name "$package_file_name" luci-i18n-openlist2-zh-tw; then
-    printf 'luci-app-openlist2\n'
-    return 0
-  fi
-
-  if package_file_matches_name "$package_file_name" lucky ||
-    package_file_matches_name "$package_file_name" luci-app-lucky ||
-    package_file_matches_name "$package_file_name" luci-i18n-lucky-zh-cn; then
-    printf 'luci-app-lucky\n'
-    return 0
-  fi
-
-  if package_file_matches_name "$package_file_name" luci-theme-aurora ||
-    package_file_matches_name "$package_file_name" luci-app-aurora-config ||
-    package_file_matches_name "$package_file_name" luci-i18n-aurora-config-zh-cn ||
-    package_file_matches_name "$package_file_name" luci-i18n-aurora-config-zh-tw; then
-    printf 'luci-theme-aurora\n'
-    return 0
-  fi
-
-  if package_file_matches_name "$package_file_name" nginx ||
-    package_file_matches_name "$package_file_name" nginx-full ||
-    package_file_matches_name "$package_file_name" nginx-ssl; then
-    printf 'nginx\n'
-    return 0
-  fi
+  package_file_matches_name "$package_file_name" tailscale && { printf 'tailscale\n'; return 0; }
+  package_file_matches_name "$package_file_name" dmesg && { printf 'dmesg\n'; return 0; }
+  package_file_matches_name "$package_file_name" htop && { printf 'htop\n'; return 0; }
+  package_file_matches_name "$package_file_name" nano && { printf 'nano\n'; return 0; }
 
   return 1
 }
@@ -686,7 +503,7 @@ release_package_name() {
 release_package_arch_suffix() {
   local group_name="$1"
 
-  if [ "$group_name" = luci-theme-aurora ]; then
+  if [ "$group_name" = argon ]; then
     printf 'all\n'
     return
   fi
@@ -701,7 +518,7 @@ artifact_zip_name() {
 
   sdk_prefix="$(normalize_sdk_version "$OPENWRT_SDK_VERSION")"
 
-  if [ "$group_name" = luci-theme-aurora ]; then
+  if [ "$group_name" = argon ]; then
     printf '%s-%s-all.zip\n' "$sdk_prefix" "$group_name"
     return
   fi
@@ -712,7 +529,7 @@ artifact_zip_name() {
 artifact_group_should_be_skipped() {
   local group_name="$1"
 
-  [ "$group_name" = luci-theme-aurora ] || return 1
+  [ "$group_name" = argon ] || return 1
   [ "$PACKAGE_SELECTED_ARCH" = ALL ] || return 1
   [ "$PACKAGE_ARCH_NAME" != x86-64 ]
 }
@@ -720,90 +537,20 @@ artifact_group_should_be_skipped() {
 generate_compile_targets() {
   COMPILE_TARGETS=()
 
-  if selection_in luci-app-aria2 && {
-    config_package_enabled aria2 ||
-      config_package_enabled luci-app-aria2
-  }; then
-    add_compile_target package/feeds/packages/aria2/compile
+  selection_in wireguard && config_package_enabled wireguard-tools && add_compile_target package/feeds/base/wireguard-tools/compile
+  selection_in wireguard && config_package_enabled luci-proto-wireguard && add_compile_target package/feeds/luci/luci-proto-wireguard/compile
+  if selection_in argon && ! artifact_group_should_be_skipped argon; then
+    config_package_enabled luci-theme-argon && add_compile_target package/luci-theme-argon/compile
+    config_package_enabled luci-app-argon-config && add_compile_target package/luci-app-argon-config/compile
   fi
-
-  if selection_in luci-app-aria2 && {
-    config_package_enabled ariang ||
-      config_package_enabled ariang-nginx
-  }; then
-    add_compile_target package/feeds/packages/ariang/compile
-  fi
-
-  if { selection_in frp && {
-    config_package_enabled frpc ||
-      config_package_enabled frps
-  }; } || { selection_in luci-app-frpc && {
-    config_package_enabled frpc ||
-      config_package_enabled luci-app-frpc
-  }; } || { selection_in luci-app-frps && {
-    config_package_enabled frps ||
-      config_package_enabled luci-app-frps
-  }; }; then
-    add_compile_target package/feeds/packages/frp/compile
-  fi
-
-  if selection_in nginx && {
-    config_package_enabled nginx ||
-    config_package_enabled nginx-full ||
-    config_package_enabled nginx-ssl
-  }; then
-    add_compile_target package/feeds/packages/nginx/compile
-  fi
-
-  if selection_in luci-app-openlist2 && {
-    config_package_enabled openlist2 ||
-      config_package_enabled luci-app-openlist2
-  }; then
-    add_compile_target package/openlist2/openlist2/compile
-  fi
-
-  if selection_in luci-app-lucky && {
-    config_package_enabled lucky ||
-      config_package_enabled luci-app-lucky
-  }; then
-    add_compile_target package/lucky/lucky/compile
-  fi
-
-  if selection_in frp luci-app-frpc && config_package_enabled luci-app-frpc; then
-    add_compile_target package/feeds/luci/luci-app-frpc/compile
-  fi
-
-  if selection_in frp luci-app-frps && config_package_enabled luci-app-frps; then
-    add_compile_target package/feeds/luci/luci-app-frps/compile
-  fi
-
-  if selection_in luci-app-aria2 && config_package_enabled luci-app-aria2 && [ -d "$SDK_ROOT/package/feeds/luci/luci-app-aria2" ]; then
-    add_compile_target package/feeds/luci/luci-app-aria2/compile
-  fi
-
-  if selection_in luci-app-gecoosac && {
-    config_package_enabled gecoosac ||
-      config_package_enabled luci-app-gecoosac
-  }; then
-    add_compile_target package/luci-app-gecoosac/gecoosac/compile
-  fi
-
-  if selection_in luci-app-gecoosac && config_package_enabled luci-app-gecoosac; then
-    add_compile_target package/luci-app-gecoosac/luci-app-gecoosac/compile
-  fi
-
-  if selection_in luci-app-openlist2 && config_package_enabled luci-app-openlist2; then
-    add_compile_target package/openlist2/luci-app-openlist2/compile
-  fi
-
-  if selection_in luci-app-lucky && config_package_enabled luci-app-lucky; then
-    add_compile_target package/lucky/luci-app-lucky/compile
-  fi
-
-  if selection_in luci-theme-aurora && ! artifact_group_should_be_skipped luci-theme-aurora; then
-    config_package_enabled luci-theme-aurora && add_compile_target package/luci-theme-aurora/compile
-    config_package_enabled luci-app-aurora-config && add_compile_target package/luci-app-aurora-config/compile
-  fi
+  selection_in banip && config_package_enabled luci-app-banip && add_compile_target package/feeds/packages/banip/compile
+  selection_in banip && config_package_enabled luci-app-banip && add_compile_target package/feeds/luci/luci-app-banip/compile
+  selection_in ddns && config_package_enabled ddns-scripts && add_compile_target package/feeds/packages/ddns-scripts/compile
+  selection_in ddns && config_package_enabled luci-app-ddns && add_compile_target package/feeds/luci/luci-app-ddns/compile
+  selection_in tailscale && config_package_enabled tailscale && add_compile_target package/feeds/packages/tailscale/compile
+  selection_in dmesg && config_package_enabled dmesg && add_compile_target package/feeds/base/util-linux/compile
+  selection_in htop && config_package_enabled htop && add_compile_target package/feeds/packages/htop/compile
+  selection_in nano && config_package_enabled nano && add_compile_target package/feeds/packages/nano/compile
 
   [ "${#COMPILE_TARGETS[@]}" -gt 0 ] || die "No matching package compile targets were enabled by $PACKAGE_CONFIG_FILES for PACKAGE_SELECTION=$PACKAGE_SELECTION"
 }
@@ -913,7 +660,6 @@ cd "$SDK_ROOT"
 ./scripts/feeds update -a
 
 log "Load custom packages"
-remove_builtin_packages
 load_custom_packages
 
 log "Refresh SDK feed indexes"
